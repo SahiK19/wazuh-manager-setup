@@ -1,13 +1,4 @@
-Yes — you definitely should. Here’s a **clean, end-user friendly README** you can drop straight into your repo, plus the exact commands to add/commit it.
 
----
-
-## 1) Create/overwrite `README.md` in your repo
-
-Run this on the EC2 (inside `/opt/wazuh-manager-setup-repo`):
-
-```bash
-cat > /opt/wazuh-manager-setup-repo/README.md <<'EOF'
 # Wazuh Manager Setup Repo (Custom Rules + HTTP `alerts.json` + Push Service)
 
 This repository automates a reproducible Wazuh Manager setup with:
@@ -15,70 +6,81 @@ This repository automates a reproducible Wazuh Manager setup with:
 - ✅ HTTP server exposing Wazuh `alerts.json` over port **8000**
 - ✅ Push service that streams Wazuh alerts to an external dashboard API (configurable via `.env`)
 
-> This repo is designed for Ubuntu/Debian servers.
+> Designed for Ubuntu/Debian servers.
 
 ---
 
 ## Folder Structure
 
-```
-
+```text
 configs/wazuh/
-local_rules.xml          # Custom detection rules (required)
-ossec.conf               # Optional manager config overrides
-local_decoder.xml        # Optional decoders
+  local_rules.xml           # Custom detection rules (required)
+  ossec.conf                # Optional manager config overrides
+  local_decoder.xml         # Optional decoders
 
 systemd/
-wazuh-http-server.service # Serves /var/ossec/logs/alerts over HTTP (port 8000)
-wazuh-push.service        # Pushes alerts to dashboard endpoint
+  wazuh-http-server.service # Serves /var/ossec/logs/alerts over HTTP (port 8000)
+  wazuh-push.service        # Pushes alerts to dashboard endpoint
 
 scripts/
-wazuh_push.py             # Env-based push script (repo-safe)
-requirements.txt          # Python dependency (requests)
-.env.example              # One-file configuration template
+  wazuh_push.py             # Env-based push script (repo-safe)
+  requirements.txt          # Python dependency (requests)
+  .env.example              # One-file configuration template
 
 install.sh                  # Main installer (end user runs this)
-
 ````
 
 ---
 
 ## What This Setup Does
 
-### 1) Wazuh Quickstart install
-`install.sh` installs Wazuh using the official quickstart installer (all-in-one).
+### 1) Installs Wazuh (Quickstart)
+
+`install.sh` installs Wazuh using the official quickstart installer (all-in-one), if Wazuh is not already installed.
 
 ### 2) Applies custom rules
-Your repo’s `configs/wazuh/local_rules.xml` is copied into:
-- `/var/ossec/etc/rules/local_rules.xml`
 
-Optional files (if present in repo):
-- `/var/ossec/etc/ossec.conf`
-- `/var/ossec/etc/decoders/local_decoder.xml`
+Your repo’s `configs/wazuh/local_rules.xml` is copied into:
+
+* `/var/ossec/etc/rules/local_rules.xml`
+
+Optional files (if present in the repo) can also be applied:
+
+* `/var/ossec/etc/ossec.conf`
+* `/var/ossec/etc/decoders/local_decoder.xml`
 
 ### 3) Enables HTTP exposure of alerts
-A systemd service starts:
-- `python3 -m http.server 8000`  
-Serving directory:
-- `/var/ossec/logs/alerts`
 
-So the file becomes available at:
-- `http://<MANAGER_IP>:8000/alerts.json`
+A systemd service starts:
+
+* `python3 -m http.server 8000`
+
+Serving directory:
+
+* `/var/ossec/logs/alerts`
+
+So `alerts.json` becomes available at:
+
+* `http://<MANAGER_IP>:8000/alerts.json`
 
 ### 4) Pushes alerts to your dashboard API
+
 `wazuh-push` tails Wazuh `alerts.json` and sends each JSON alert to your dashboard API endpoint.
+
 The endpoint and API key are set in **ONE file**:
-- `/opt/wazuh-push/.env`
+
+* `/opt/wazuh-push/.env`
 
 ---
 
 ## Install (End User)
 
 ### 1) Clone
+
 ```bash
 git clone https://github.com/SahiK19/wazuh-manager-setup.git
 cd wazuh-manager-setup
-````
+```
 
 ### 2) Run installer
 
@@ -89,6 +91,8 @@ sudo ./install.sh
 
 ### 3) Configure push destination (ONE file)
 
+Edit:
+
 ```bash
 sudo nano /opt/wazuh-push/.env
 ```
@@ -96,7 +100,7 @@ sudo nano /opt/wazuh-push/.env
 Example:
 
 ```env
-DASHBOARD_URL=http://CHANGE_ME:5000/api/wazuh
+DASHBOARD_URL=http://CHANGE_ME:5000/api/wazuh   #put the ip of your dashboard ec2
 API_KEY=CHANGE_ME
 ALERTS_FILE=/var/ossec/logs/alerts/alerts.json
 POLL_SLEEP=0.2
@@ -107,6 +111,49 @@ REQ_TIMEOUT=3
 
 ```bash
 sudo systemctl restart wazuh-http-server wazuh-push
+```
+
+---
+
+## Environment Configuration (`.env`)
+
+### Where the `.env` lives
+
+* Installer creates: **`/opt/wazuh-push/.env`**
+* Repo template: **`scripts/.env.example`**
+* `.env` is ignored by git via `.gitignore` (do not commit secrets)
+
+### Variables explained
+
+| Variable        | Required | Meaning                                      | Example                                |
+| --------------- | -------: | -------------------------------------------- | -------------------------------------- |
+| `DASHBOARD_URL` |        ✅ | Where Wazuh alerts are POSTed to             | `http://<DASHBOARD_IP>:5000/api/wazuh` |
+| `API_KEY`       |        ✅ | Shared secret expected by your dashboard API | `your_api_key_here`                    |
+| `ALERTS_FILE`   | Optional | Alerts file to follow                        | `/var/ossec/logs/alerts/alerts.json`   |
+| `POLL_SLEEP`    | Optional | Sleep time when there is no new log line     | `0.2`                                  |
+| `REQ_TIMEOUT`   | Optional | HTTP request timeout (seconds)               | `3`                                    |
+
+### Apply `.env` changes
+
+After editing `.env`, restart push service:
+
+```bash
+sudo systemctl restart wazuh-push
+sudo systemctl status wazuh-push --no-pager -l
+```
+
+### Test dashboard connectivity (recommended)
+
+Send a test JSON payload to your dashboard endpoint:
+
+```bash
+DASHBOARD_URL="$(grep '^DASHBOARD_URL=' /opt/wazuh-push/.env | cut -d= -f2-)"
+API_KEY="$(grep '^API_KEY=' /opt/wazuh-push/.env | cut -d= -f2-)"
+
+curl -i -X POST "$DASHBOARD_URL" \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"test":"hello-from-wazuh-manager"}'
 ```
 
 ---
@@ -125,18 +172,23 @@ systemctl status wazuh-http-server wazuh-push --no-pager -l
 curl http://<MANAGER_IP>:8000/alerts.json
 ```
 
+### View push logs
+
+```bash
+sudo journalctl -u wazuh-push -n 200 --no-pager
+```
+
 ---
 
 ## Required Firewall / Security Group Rules
 
-Open inbound:
+Open inbound (as needed):
 
-* **8000/tcp** (for HTTP alerts.json)
-* Wazuh agent ports as needed (depends on your environment)
+* **8000/tcp** for HTTP `alerts.json`
 
 Recommended:
 
-* Restrict `8000/tcp` to your dashboard server IP only (don’t expose to the whole internet).
+* Restrict **8000/tcp** to your dashboard server IP only (avoid exposing alerts publicly).
 
 ---
 
@@ -150,7 +202,7 @@ Check:
 sudo journalctl -u wazuh-push -n 200 --no-pager
 ```
 
-Most common reasons:
+Common reasons:
 
 * wrong `DASHBOARD_URL`
 * dashboard server is not reachable
@@ -158,7 +210,7 @@ Most common reasons:
 
 ### HTTP server works but `alerts.json` is empty
 
-Wazuh might not be generating alerts yet. Trigger a test event or check Wazuh logs.
+Wazuh might not be generating alerts yet. Trigger activity on an agent or review Wazuh logs.
 
 ### Services not found after install
 
@@ -173,28 +225,14 @@ sudo systemctl enable --now wazuh-http-server wazuh-push
 
 ## Notes
 
-* This repo does NOT commit any real secrets. Users must configure `.env` locally.
-* `.env` is ignored via `.gitignore`.
+* This repo does **not** commit real secrets. Users must configure `.env` locally.
+* `.env` should remain ignored via `.gitignore`.
   EOF
 
 ````
 
----
-
-## 2) Confirm the README exists
+Then confirm it:
 ```bash
-ls -lah /opt/wazuh-manager-setup-repo/README.md
+head -n 40 /opt/wazuh-manager-setup-repo/README.md
 ````
-
----
-
-## 3) Commit README into git
-
-```bash
-cd /opt/wazuh-manager-setup-repo
-git add README.md
-git commit -m "Add README with setup and usage instructions"
-```
-
----
 
