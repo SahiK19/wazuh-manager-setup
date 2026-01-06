@@ -1,0 +1,14 @@
+# /etc/systemd/system/wazuh-http-server.service
+[Unit]
+Description=Expose Wazuh alerts.json over HTTP
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 -m http.server 8000 --bind 0.0.0.0
+WorkingDirectory=/var/ossec/logs/alerts
+Restart=always
+User=wazuh
+Group=wazuh
+
+[Install]
+WantedBy=multi-user.target

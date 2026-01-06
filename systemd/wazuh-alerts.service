@@ -1,0 +1,27 @@
+# /etc/systemd/system/wazuh-alerts.service
+[Unit]
+Description=Expose Wazuh alerts.json over HTTP in real-time
+After=network.target wazuh-manager.service
+Wants=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+
+# IMPORTANT: systemd does NOT expand ~
+ExecStart=/usr/bin/python3 /wazuh_alerts_server.py
+
+Restart=always
+RestartSec=3
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+
+# Hardening (safe but not restrictive)
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

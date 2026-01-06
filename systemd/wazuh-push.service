@@ -1,0 +1,28 @@
+# /etc/systemd/system/wazuh-push.service
+[Unit]
+Description=Wazuh Log Push Service (VM → EC2 Dashboard)
+After=network-online.target wazuh-manager.service
+Wants=network-online.target
+Requires=wazuh-manager.service
+
+[Service]
+Type=simple
+User=root
+
+# ✅ This directory EXISTS
+WorkingDirectory=/opt
+
+# ✅ This script EXISTS
+ExecStart=/usr/bin/python3 -u /opt/wazuh_push.py
+
+Restart=always
+RestartSec=3
+
+Environment=PYTHONUNBUFFERED=1
+LimitNOFILE=65535
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

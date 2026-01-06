@@ -1,0 +1,72 @@
+<!-- ========================= -->
+<!-- Local Wazuh Custom Rules -->
+<!-- ========================= -->
+
+<group name="local,syslog,sshd,">
+
+  <!-- SSH authentication failure -->
+  <rule id="100001" level="5">
+    <if_sid>5716</if_sid>
+    <description>SSH authentication failure detected.</description>
+    <group>authentication_failed,pci_dss_10.2.4,pci_dss_10.2.5</group>
+  </rule>
+
+  <!-- Privilege escalation via sudo -->
+  <rule id="200001" level="7">
+    <if_sid>550</if_sid>
+    <match>sudo:root</match>
+    <description>Privilege escalation attempt detected via sudo.</description>
+    <group>privilege_escalation,sudo</group>
+  </rule>
+
+  <!-- Suspicious privileged command execution -->
+  <rule id="200004" level="10">
+    <if_group>sudo</if_group>
+    <field name="command">chmod|chown|passwd|shadow|sudoers</field>
+    <description>Suspicious privileged command execution detected.</description>
+    <group>syslog,privilege_escalation</group>
+  </rule>
+
+  <!-- Successful SSH login -->
+<rule id="200003" level="6">
+  <if_group>sshd</if_group>
+  <match>Accepted password|Accepted publickey</match>
+  <description>Successful SSH login detected.</description>
+  <group>authentication_success,ssh</group>
+</rule>
+
+
+
+
+</group>
+
+
+<!-- ========================= -->
+<!-- Custom dpkg Rules -->
+<!-- ========================= -->
+
+<group name="custom_dpkg,">
+
+  <!-- Package installation detection -->
+  <rule id="12002" level="12" overwrite="yes">
+    <if_sid>2900</if_sid>
+    <field name="dpkg_status">^status installed$</field>
+    <description>Package installation activity detected on the system.</description>
+    <group>custom,dpkg,package_install</group>
+  </rule>
+
+</group>
+<group name="local,syslog,cron,persistence,">
+
+  <rule id="2834" level="11" overwrite="yes">
+    <if_matched_sid>2834</if_matched_sid>
+    <description>
+      Cron job modification detected (possible persistence mechanism).
+    </description>
+    <mitre>
+      <id>T1053</id>
+    </mitre>
+    <group>persistence,cron,privilege_escalation</group>
+  </rule>
+
+</group>
